@@ -1,1 +1,9 @@
 pytest
+torch
+gymnasium
+numpy
+matplotlib
+pandas
+tqdm
+scipy
+tensorboard
