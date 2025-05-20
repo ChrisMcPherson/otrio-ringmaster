@@ -5,7 +5,7 @@ The project supplies:
 
 * a pure‑Python implementation of Otrio’s rules  
 * a Gymnasium‑compatible environment with legal‑move masking  
-* baseline agents (random, heuristic, tabular Q) and deep RL pipelines (PPO, AlphaZero‑style)  
+* baseline agents (random, heuristic, tabular Q, PPO)
 * scripts for large‑scale self‑play, evaluation and curriculum learning
 
 ---
@@ -118,7 +118,7 @@ pip install -e ".[dev]"
 pytest
 
 # train a PPO agent
-python scripts/train_ppo.py --config configs/ppo_small.yaml
+python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_agent.pkl
 
 # or quickly try the tabular Q-learning baseline
 python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
