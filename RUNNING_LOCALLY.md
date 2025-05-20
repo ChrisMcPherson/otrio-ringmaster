@@ -1,40 +1,32 @@
 # Running Otrio-RL Locally
 
-This short guide shows how to set up the project, run the tests and train the example tabular Q‑learning agent. The deeper RL agents mentioned in the README (PPO, AlphaZero-style) are not yet implemented, so only the baseline components are available.
-
 ## Setup
 
 ```bash
-# clone the repository
-git clone <repo-url>
-cd otrio-ringmaster
+# clone and enter the repo
+git clone https://github.com/your-org/otrio-rl.git
+cd otrio-rl
 
-# install dependencies (only pytest is required)
-pip install -r requirements.txt
+# install dependencies
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
-## Running the tests
+The project has no heavy dependencies so installation is quick. Tests can be run with `pytest`.
 
-Execute the unit tests to verify the environment works:
+## Training the baseline agents
+
+To train the tabular Q-learning agent for a small sanity check:
 
 ```bash
-pytest -q
+python scripts/train_tabular_q.py --episodes 200 --checkpoint q_agent.pkl
 ```
 
-## Training the tabular Q agent
-
-You can train the provided baseline agent against a random opponent:
+To try the lightweight PPO implementation:
 
 ```bash
-python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
+python scripts/train_ppo.py --episodes 200 --checkpoint ppo_agent.pkl
 ```
 
-Progress is printed every 100 episodes by default. The checkpoint path is optional, but allows you to resume training later via `--load q_agent.pkl`.
-
-## Evaluating the reward scheme
-
-A helper script `scripts/evaluate_reward_balance.py` runs two random agents and reports the distribution of wins and draws. This can be useful for verifying that the reward settings are symmetrical and working as expected:
-
-```bash
-python scripts/evaluate_reward_balance.py --episodes 100
-```
+Both scripts print periodic win statistics and write checkpoints when the `--checkpoint` argument is supplied.
