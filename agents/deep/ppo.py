@@ -1,8 +1,10 @@
-import math
 import pickle
-import random
 from dataclasses import dataclass
 from typing import List, Tuple
+
+import torch
+from torch import nn
+from torch.nn import functional as F
 
 from otrio.board import Board
 from otrio.pieces import Size
@@ -22,21 +24,28 @@ class Step:
 
 
 class PPOAgent:
-    """Minimal PPO agent implemented without external dependencies."""
+    """PPO agent implemented using PyTorch."""
 
-    def __init__(self, lr: float = 0.01, gamma: float = 0.99, clip_eps: float = 0.2, hidden: int = 64):
+    def __init__(self, lr: float = 1e-3, gamma: float = 0.99, clip_eps: float = 0.2, hidden: int = 64):
         self.lr = lr
         self.gamma = gamma
         self.clip_eps = clip_eps
         self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 1
         self.action_dim = BOARD_SIZE * BOARD_SIZE * len(SIZES)
-        rnd = random.Random()
-        self.w1 = [[rnd.uniform(-1, 1) / math.sqrt(self.input_dim) for _ in range(hidden)] for _ in range(self.input_dim)]
-        self.b1 = [0.0 for _ in range(hidden)]
-        self.w2 = [[rnd.uniform(-1, 1) / math.sqrt(hidden) for _ in range(self.action_dim)] for _ in range(hidden)]
-        self.b2 = [0.0 for _ in range(self.action_dim)]
-        self.wv = [rnd.uniform(-1, 1) / math.sqrt(hidden) for _ in range(hidden)]
-        self.bv = 0.0
+
+        self.model = nn.Sequential(
+            nn.Linear(self.input_dim, hidden),
+            nn.Tanh(),
+        )
+        self.policy_head = nn.Linear(hidden, self.action_dim)
+        self.value_head = nn.Linear(hidden, 1)
+
+        self.optimizer = torch.optim.Adam(
+            list(self.model.parameters())
+            + list(self.policy_head.parameters())
+            + list(self.value_head.parameters()),
+            lr=self.lr,
+        )
 
     # utilities -----------------------------------------------------------
     def _encode(self, board: Board, player: int) -> List[float]:
@@ -58,134 +67,80 @@ class PPOAgent:
                     mask.append(1 if board.is_legal(player, r, c, s) else 0)
         return mask
 
-    def _forward(self, obs: List[float]):
-        h = []
-        for j in range(len(self.w1[0])):
-            v = self.b1[j]
-            for i, x in enumerate(obs):
-                v += x * self.w1[i][j]
-            h.append(math.tanh(v))
-        logits = []
-        for k in range(self.action_dim):
-            v = self.b2[k]
-            for j, hv in enumerate(h):
-                v += hv * self.w2[j][k]
-            logits.append(v)
-        value = self.bv + sum(h[j] * self.wv[j] for j in range(len(h)))
-        return h, logits, value
+    def _forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        hidden = self.model(obs)
+        logits = self.policy_head(hidden)
+        value = self.value_head(hidden).squeeze(-1)
+        return logits, value
 
-    def _log_softmax(self, logits: List[float], mask: List[int]) -> List[float]:
-        masked = [l if m else -1e9 for l, m in zip(logits, mask)]
-        max_logit = max(masked)
-        exps = [math.exp(l - max_logit) for l in masked]
-        denom = sum(exps)
-        return [l - (max_logit + math.log(denom)) for l in masked]
+    def _log_softmax(self, logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        logits = logits.masked_fill(~mask, -1e9)
+        return F.log_softmax(logits, dim=-1)
 
     def select_action(self, board: Board, player: int) -> Tuple[Tuple[int, int], Step]:
         obs = self._encode(board, player)
         mask = self._legal_mask(board, player)
-        h, logits, value = self._forward(obs)
-        log_probs = self._log_softmax(logits, mask)
-        probs = [math.exp(lp) for lp in log_probs]
-        # sample
-        r = random.random()
-        cum = 0.0
-        action_idx = 0
-        for i, p in enumerate(probs):
-            cum += p
-            if r <= cum:
-                action_idx = i
-                break
-        step = Step(obs=obs, mask=mask, action=action_idx, logp=log_probs[action_idx], value=value, reward=0.0)
+        obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+        logits, value = self._forward(obs_t)
+        mask_t = torch.tensor(mask, dtype=torch.bool).unsqueeze(0)
+        log_probs = self._log_softmax(logits, mask_t)
+        probs = log_probs.exp().squeeze(0)
+        dist = torch.distributions.Categorical(probs)
+        action_idx = dist.sample().item()
+        step = Step(obs=obs, mask=mask, action=action_idx, logp=log_probs[0, action_idx].item(), value=value.item(), reward=0.0)
         well = action_idx // len(SIZES)
         size = action_idx % len(SIZES)
         return (well, size), step
 
     # gradient helpers ----------------------------------------------------
-    def _compute_grad(self, step: Step):
-        h, logits, value = self._forward(step.obs)
-        log_probs = self._log_softmax(logits, step.mask)
-        probs = [math.exp(lp) for lp in log_probs]
-        logp = log_probs[step.action]
-        ratio = math.exp(logp - step.logp)
-        clip_ratio = max(1 - self.clip_eps, min(1 + self.clip_eps, ratio))
-        use_clip = (ratio > clip_ratio and step.adv > 0) or (ratio < clip_ratio and step.adv < 0)
-        grad_logp = 0.0 if use_clip else -step.adv * ratio
-        # grad w2, b2
-        dlogits = [grad_logp * ((1 if i == step.action else 0) - probs[i]) for i in range(self.action_dim)]
-        gw2 = [[h[j] * dlogits[k] for k in range(self.action_dim)] for j in range(len(h))]
-        gb2 = dlogits
-        # value grads
-        dv = value - step.ret
-        gwv = [h[j] * dv for j in range(len(h))]
-        gbv = dv
-        # grad w1, b1
-        dh = [sum(self.w2[j][k] * dlogits[k] for k in range(self.action_dim)) + self.wv[j] * dv for j in range(len(h))]
-        dz1 = [dh[j] * (1 - h[j] * h[j]) for j in range(len(h))]
-        gw1 = [[step.obs[i] * dz1[j] for j in range(len(h))] for i in range(len(step.obs))]
-        gb1 = dz1
-        return gw1, gb1, gw2, gb2, gwv, gbv
+    def _compute_loss(self, obs, masks, actions, old_logp, returns, advs):
+        logits, values = self._forward(obs)
+        log_probs = self._log_softmax(logits, masks)
+        selected_logp = log_probs[range(len(actions)), actions]
+        ratio = torch.exp(selected_logp - old_logp)
+        clip_ratio = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps)
+        policy_loss = -(torch.min(ratio * advs, clip_ratio * advs)).mean()
+        value_loss = F.mse_loss(values, returns)
+        return policy_loss + 0.5 * value_loss
 
     def update(self, steps: List[Step], epochs: int = 3, batch_size: int = 8):
+        obs = torch.tensor([s.obs for s in steps], dtype=torch.float32)
+        masks = torch.tensor([s.mask for s in steps], dtype=torch.bool)
+        actions = torch.tensor([s.action for s in steps], dtype=torch.long)
+        old_logp = torch.tensor([s.logp for s in steps], dtype=torch.float32)
+        returns = torch.tensor([s.ret for s in steps], dtype=torch.float32)
+        advs = torch.tensor([s.adv for s in steps], dtype=torch.float32)
+        advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+
         for _ in range(epochs):
-            random.shuffle(steps)
+            perm = torch.randperm(len(steps))
             for start in range(0, len(steps), batch_size):
-                batch = steps[start:start + batch_size]
-                gw1 = [[0.0 for _ in range(len(self.w1[0]))] for _ in range(self.input_dim)]
-                gb1 = [0.0 for _ in range(len(self.w1[0]))]
-                gw2 = [[0.0 for _ in range(self.action_dim)] for _ in range(len(self.w1[0]))]
-                gb2 = [0.0 for _ in range(self.action_dim)]
-                gwv = [0.0 for _ in range(len(self.w1[0]))]
-                gbv = 0.0
-                for step in batch:
-                    g1, b1, g2, b2, gv, bv = self._compute_grad(step)
-                    for i in range(self.input_dim):
-                        for j in range(len(self.w1[0])):
-                            gw1[i][j] += g1[i][j]
-                    for j in range(len(self.w1[0])):
-                        gb1[j] += b1[j]
-                    for j in range(len(self.w1[0])):
-                        for k in range(self.action_dim):
-                            gw2[j][k] += g2[j][k]
-                    for k in range(self.action_dim):
-                        gb2[k] += b2[k]
-                    for j in range(len(self.w1[0])):
-                        gwv[j] += gv[j]
-                    gbv += bv
-                n = float(len(batch))
-                for i in range(self.input_dim):
-                    for j in range(len(self.w1[0])):
-                        self.w1[i][j] -= self.lr * gw1[i][j] / n
-                for j in range(len(self.w1[0])):
-                    self.b1[j] -= self.lr * gb1[j] / n
-                for j in range(len(self.w1[0])):
-                    for k in range(self.action_dim):
-                        self.w2[j][k] -= self.lr * gw2[j][k] / n
-                for k in range(self.action_dim):
-                    self.b2[k] -= self.lr * gb2[k] / n
-                for j in range(len(self.w1[0])):
-                    self.wv[j] -= self.lr * gwv[j] / n
-                self.bv -= self.lr * gbv / n
+                idx = perm[start:start + batch_size]
+                loss = self._compute_loss(
+                    obs[idx],
+                    masks[idx],
+                    actions[idx],
+                    old_logp[idx],
+                    returns[idx],
+                    advs[idx],
+                )
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
     def save(self, path: str):
-        data = {
-            'w1': self.w1,
-            'b1': self.b1,
-            'w2': self.w2,
-            'b2': self.b2,
-            'wv': self.wv,
-            'bv': self.bv,
-        }
-        with open(path, 'wb') as f:
-            pickle.dump(data, f)
+        torch.save(
+            {
+                "model": self.model.state_dict(),
+                "policy_head": self.policy_head.state_dict(),
+                "value_head": self.value_head.state_dict(),
+            },
+            path,
+        )
 
     def load(self, path: str):
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-        self.w1 = data['w1']
-        self.b1 = data['b1']
-        self.w2 = data['w2']
-        self.b2 = data['b2']
-        self.wv = data['wv']
-        self.bv = data['bv']
+        data = torch.load(path, map_location="cpu")
+        self.model.load_state_dict(data["model"])
+        self.policy_head.load_state_dict(data["policy_head"])
+        self.value_head.load_state_dict(data["value_head"])
 
