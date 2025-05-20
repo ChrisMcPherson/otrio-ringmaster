@@ -72,3 +72,4 @@ class TabularQAgent:
         self.q = defaultdict(lambda: defaultdict(float))
         for k, v in data.items():
             self.q[k] = defaultdict(float, v)
+

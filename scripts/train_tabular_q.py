@@ -1,4 +1,5 @@
 import argparse
+
 from agents.random_agent import RandomAgent
 from agents.tabular_q import TabularQAgent
 from envs.otrio_env import OtrioEnv
@@ -54,3 +55,4 @@ if __name__ == "__main__":
     parser.add_argument("--load", type=str, default=None, help="path to load agent state")
     args = parser.parse_args()
     train(args.episodes, args.checkpoint, args.load)
+
