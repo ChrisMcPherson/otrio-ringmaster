@@ -11,9 +11,14 @@ def test_training_creates_checkpoint(tmp_path):
     )
     assert checkpoint.exists()
 
-
-def test_evaluate_reward_balance_runs():
-    subprocess.run(
-        [sys.executable, "scripts/evaluate_reward_balance.py", "--episodes", "5"],
-        check=True,
-    )
+def test_ppo_training_runs(tmp_path):
+    checkpoint = tmp_path / "ppo.pkl"
+    subprocess.run([
+        sys.executable,
+        "scripts/train_ppo.py",
+        "--episodes",
+        "1",
+        "--checkpoint",
+        str(checkpoint),
+    ], check=True)
+    assert checkpoint.exists()
