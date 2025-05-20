@@ -117,6 +117,9 @@ pip install -e ".[dev]"
 # quick sanity check
 pytest
 
+# train a tabular Q-learning agent
+python scripts/train_tabular_q.py --episodes 5000 --save q_agent.pkl
+
 # train a PPO agent
 python scripts/train_ppo.py --config configs/ppo_small.yaml
 ```
