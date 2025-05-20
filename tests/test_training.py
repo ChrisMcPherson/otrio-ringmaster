@@ -22,4 +22,3 @@ def test_ppo_training_runs(tmp_path):
         str(checkpoint),
     ], check=True)
     assert checkpoint.exists()
-
