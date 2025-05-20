@@ -1,4 +1,11 @@
 import argparse
+import sys
+from pathlib import Path
+
+# Ensure project root is on the Python path when the script is executed
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from agents.random_agent import RandomAgent
 from agents.tabular_q import TabularQAgent
