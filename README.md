@@ -119,6 +119,9 @@ pytest
 
 # train a PPO agent
 python scripts/train_ppo.py --config configs/ppo_small.yaml
+
+# or quickly try the tabular Q-learning baseline
+python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
 ```
 
 Logs (TensorBoard & CSV) land in `./runs/`, checkpoints in `./checkpoints/`.

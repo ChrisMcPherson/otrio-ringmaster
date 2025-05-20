@@ -1,4 +1,5 @@
 import random
+import pickle
 from collections import defaultdict
 from typing import Tuple, Dict
 
@@ -42,12 +43,33 @@ class TabularQAgent:
         best_move = max(moves, key=lambda m: q_values[m])
         return best_move
 
-    def update(self, prev_board: Board, player: int, action: Tuple[int, int], reward: float, next_board: Board, done: bool):
+    def update(
+        self,
+        prev_board: Board,
+        player: int,
+        action: Tuple[int, int],
+        reward: float,
+        next_board: Board,
+        next_player: int,
+        done: bool,
+    ):
         key = self._state_key(prev_board, player)
-        next_key = self._state_key(next_board, (player + 1) % 2)
+        next_key = self._state_key(next_board, next_player)
         q_values = self.q[key]
         next_q_values = self.q[next_key]
         best_next = max(next_q_values.values(), default=0.0)
         q_old = q_values[action]
         target = reward + (0 if done else self.gamma * best_next)
         q_values[action] = q_old + self.alpha * (target - q_old)
+
+    def save(self, path: str):
+        with open(path, "wb") as f:
+            pickle.dump(dict(self.q), f)
+
+    def load(self, path: str):
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        self.q = defaultdict(lambda: defaultdict(float))
+        for k, v in data.items():
+            self.q[k] = defaultdict(float, v)
+
