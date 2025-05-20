@@ -1,3 +1,4 @@
+
 """Train a tabular Q-learning agent against a random opponent."""
 
 import argparse
