@@ -10,3 +10,10 @@ def test_training_creates_checkpoint(tmp_path):
         check=True,
     )
     assert checkpoint.exists()
+
+
+def test_evaluate_reward_balance_runs():
+    subprocess.run(
+        [sys.executable, "scripts/evaluate_reward_balance.py", "--episodes", "5"],
+        check=True,
+    )

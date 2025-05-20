@@ -1,41 +1,40 @@
 # Running Otrio-RL Locally
 
-This short guide explains how to set up the environment and train the example Tabular Q-learning agent. The project currently includes a simple `RandomAgent` and a `TabularQAgent`.
+This short guide shows how to set up the project, run the tests and train the example tabular Q‑learning agent. The deeper RL agents mentioned in the README (PPO, AlphaZero-style) are not yet implemented, so only the baseline components are available.
 
-## 1. Clone the repository
-
-```bash
-git clone https://github.com/your-org/otrio-rl.git
-cd otrio-rl
-```
-
-## 2. Install dependencies
-
-Only a minimal set of Python packages is required. Install them with:
+## Setup
 
 ```bash
-python -m pip install -r requirements.txt
+# clone the repository
+git clone <repo-url>
+cd otrio-ringmaster
+
+# install dependencies (only pytest is required)
+pip install -r requirements.txt
 ```
 
-## 3. Run the unit tests (optional)
+## Running the tests
 
-Verify the environment works:
+Execute the unit tests to verify the environment works:
 
 ```bash
 pytest -q
 ```
 
-## 4. Train the Tabular Q-learning agent
+## Training the tabular Q agent
 
-Execute the training script directly from the repository root:
+You can train the provided baseline agent against a random opponent:
 
 ```bash
 python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
 ```
 
-The script pits the `TabularQAgent` against a `RandomAgent` for the specified number of episodes. A checkpoint file is written if `--checkpoint` is provided.
+Progress is printed every 100 episodes by default. The checkpoint path is optional, but allows you to resume training later via `--load q_agent.pkl`.
 
-## Notes
+## Evaluating the reward scheme
 
-Advanced agents described in the README (such as PPO or AlphaZero-style models) are not yet implemented. Only the tabular Q-learning baseline and a random policy are available at the moment.
+A helper script `scripts/evaluate_reward_balance.py` runs two random agents and reports the distribution of wins and draws. This can be useful for verifying that the reward settings are symmetrical and working as expected:
 
+```bash
+python scripts/evaluate_reward_balance.py --episodes 100
+```
