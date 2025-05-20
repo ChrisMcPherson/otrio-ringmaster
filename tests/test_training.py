@@ -11,7 +11,6 @@ def test_training_creates_checkpoint(tmp_path):
     )
     assert checkpoint.exists()
 
-
 def test_ppo_training(tmp_path):
     checkpoint = tmp_path / "ppo.pkl"
     subprocess.run(
