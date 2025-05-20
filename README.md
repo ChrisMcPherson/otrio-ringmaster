@@ -122,6 +122,9 @@ python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_agent.pkl
 
 # or quickly try the tabular Q-learning baseline
 python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
+
+# play against your trained PPO agent
+python scripts/play_vs_ppo.py --model ppo_agent.pkl
 ```
 
 Logs (TensorBoard & CSV) land in `./runs/`, checkpoints in `./checkpoints/`.
