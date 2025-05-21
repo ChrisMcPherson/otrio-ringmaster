@@ -1,4 +1,5 @@
 from typing import Tuple, Dict, Any
+import random
 
 from otrio.board import Board
 from otrio.pieces import Size
@@ -11,12 +12,12 @@ class OtrioEnv:
     def __init__(self, players: int = 2):
         self.players = players
         self.board = Board(players)
-        self.current_player = 0
+        self.current_player = random.randrange(players)
         self.done = False
 
     def reset(self) -> Tuple[Any, Dict[str, Any]]:
         self.board.reset()
-        self.current_player = 0
+        self.current_player = random.randrange(self.players)
         self.done = False
         return self.board.to_observation(), {"current_player": self.current_player}
 
