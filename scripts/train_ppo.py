@@ -3,6 +3,11 @@ import sys
 from pathlib import Path
 from collections import deque
 
+# ──────────────────────────────────────────────────────────────
+# PPO training constants
+# ──────────────────────────────────────────────────────────────
+TIMESTEPS_PER_UPDATE = 2048      # number of env‑steps to collect before each learner.update
+
 from torch.utils.tensorboard import SummaryWriter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,10 +72,12 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
     writer = SummaryWriter()
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
+    timesteps_collected = 0
 
     for ep in range(1, episodes + 1):
         steps, info = play_episode(env, learner, opponent)
         batch.extend(steps)
+        timesteps_collected += len(steps)
 
         win = 1 if info.get("winner") == 0 else 0
         recent_results.append(win)
@@ -81,9 +88,25 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         writer.add_scalar("episode_length", episode_length, ep)
         writer.add_scalar("win_rate_recent", win_rate, ep)
 
-        if ep % 10 == 0:
-            learner.update(batch)
+        if timesteps_collected >= TIMESTEPS_PER_UPDATE:
+            # --- normalise advantages across the collected batch ------------------
+            import torch
+            advs = torch.tensor([s.adv for s in batch], dtype=torch.float32)
+            advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+            for s, a in zip(batch, advs):
+                s.adv = a.item()
+
+            # ----------------------------------------------------------------------
+            metrics = learner.update(batch)          # returns dict of training stats
+            timesteps_collected = 0
             batch.clear()
+
+            # extra TensorBoard logging
+            if metrics is not None:
+                writer.add_scalar("policy_loss", metrics.get("policy_loss", 0.0), ep)
+                writer.add_scalar("value_loss",  metrics.get("value_loss", 0.0), ep)
+                writer.add_scalar("entropy",     metrics.get("entropy",     0.0), ep)
+                writer.add_scalar("approx_kl",   metrics.get("approx_kl",  0.0), ep)
 
         if ep % 50 == 0:
             print(f"Episode {ep}: last {len(recent_results)}-episode win rate {win_rate * 100:.1f}%")
@@ -102,4 +125,3 @@ if __name__ == "__main__":
     parser.add_argument("--load", type=str, default=None)
     args = parser.parse_args()
     train(args.episodes, args.checkpoint, args.load)
-
