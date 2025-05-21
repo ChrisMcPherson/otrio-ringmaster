@@ -45,7 +45,10 @@ def play_episode(env: OtrioEnv, learner: PPOAgent, opponent):
             player = env.current_player
         else:
             prev_board = env.board.clone()
-            action = opponent.select_action(prev_board, player)
+            if isinstance(opponent, PPOAgent):
+                action, _ = opponent.select_action(prev_board, player)
+            else:
+                action = opponent.select_action(prev_board, player)
             obs, reward, done, info = env.step(action)
             # Only the tabular‑Q opponent learns online.
             if isinstance(opponent, TabularQAgent):
@@ -89,7 +92,7 @@ def train(
         opponent = PPOAgent()               # frozen opponent (weights replaced each episode)
         opponent_pool: list[dict[str, torch.Tensor]] = []
         # prime the pool with the learner's initial weights
-        opponent_pool.append(copy.deepcopy(learner.policy.state_dict()))
+        opponent_pool.append(copy.deepcopy(learner.state_dict()))
     else:
         raise ValueError(f"Unsupported stage: {stage!r}")
 
@@ -105,8 +108,8 @@ def train(
         # --- choose opponent weights if we are in snapshot‑pool mode -------------
         if stage == "pool" and opponent_pool:
             snapshot = random.choice(opponent_pool)
-            opponent.policy.load_state_dict(snapshot)
-            opponent.policy.eval()
+            opponent.load_state_dict(snapshot)
+            opponent.model.eval()
 
         steps, info = play_episode(env, learner, opponent)
         batch.extend(steps)
@@ -142,7 +145,7 @@ def train(
 
             # -- periodically snapshot learner weights into the opponent pool -----
             if stage == "pool" and (ep % SNAPSHOT_EP_INTERVAL == 0):
-                opponent_pool.append(copy.deepcopy(learner.policy.state_dict()))
+                opponent_pool.append(copy.deepcopy(learner.state_dict()))
                 if len(opponent_pool) > POOL_SIZE:
                     opponent_pool.pop(0)
 
