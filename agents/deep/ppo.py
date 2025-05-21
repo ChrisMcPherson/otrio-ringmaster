@@ -30,7 +30,9 @@ class PPOAgent:
         self.lr = lr
         self.gamma = gamma
         self.clip_eps = clip_eps
-        self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 1
+        # board occupancy plus current player flag and win-move counts for
+        # both players
+        self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 3
         self.action_dim = BOARD_SIZE * BOARD_SIZE * len(SIZES)
 
         self.model = nn.Sequential(
@@ -48,6 +50,19 @@ class PPOAgent:
         )
 
     # utilities -----------------------------------------------------------
+    def _num_winning_moves(self, board: Board, player: int) -> int:
+        """Return how many legal moves result in an immediate win."""
+        count = 0
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                for s in SIZES:
+                    if board.is_legal(player, r, c, s):
+                        board.grid[r][c][s] = player
+                        if board.check_win(player):
+                            count += 1
+                        board.grid[r][c][s] = None
+        return count
+
     def _encode(self, board: Board, player: int) -> List[float]:
         obs = board.to_observation()
         vec: List[float] = []
@@ -56,7 +71,13 @@ class PPOAgent:
                 for r in range(BOARD_SIZE):
                     for c in range(BOARD_SIZE):
                         vec.append(float(obs[p][s][r][c]))
+
+        # Add current player indicator
         vec.append(float(player))
+
+        # Append counts of immediate winning moves for the agent and opponent
+        vec.append(float(self._num_winning_moves(board, player)))
+        vec.append(float(self._num_winning_moves(board, 1 - player)))
         return vec
 
     def _legal_mask(self, board: Board, player: int) -> List[int]:
