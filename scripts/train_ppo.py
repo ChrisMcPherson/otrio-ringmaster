@@ -67,6 +67,7 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         f"lr={learner.lr}, gamma={learner.gamma}, clip_eps={learner.clip_eps}",
         global_step=0,
     )
+
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
 
