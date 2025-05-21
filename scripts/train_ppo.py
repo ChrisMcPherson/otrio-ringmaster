@@ -67,7 +67,6 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
     writer = SummaryWriter()
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
-    STEPS_PER_EPOCH = 4096
 
     for ep in range(1, episodes + 1):
         steps, info = play_episode(env, learner, opponent)
@@ -82,7 +81,7 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         writer.add_scalar("episode_length", episode_length, ep)
         writer.add_scalar("win_rate_recent", win_rate, ep)
 
-        if len(batch) >= STEPS_PER_EPOCH:
+        if ep % 10 == 0:
             learner.update(batch)
             batch.clear()
 
@@ -91,8 +90,6 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
             if checkpoint:
                 learner.save(checkpoint)
 
-    if batch:
-        learner.update(batch)
     writer.close()
     if checkpoint:
         learner.save(checkpoint)
