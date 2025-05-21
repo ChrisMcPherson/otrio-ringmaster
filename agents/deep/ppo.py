@@ -26,13 +26,23 @@ class Step:
 class PPOAgent:
     """PPO agent implemented using PyTorch."""
 
-    def __init__(self, lr: float = 1e-3, gamma: float = 0.99, clip_eps: float = 0.2, hidden: int = 64):
+    def __init__(
+        self,
+        lr: float = 3e-4,
+        gamma: float = 0.95,
+        clip_eps: float = 0.2,
+        gae_lambda: float = 0.95,
+        entropy_coef: float = 0.02,
+        max_grad_norm: float = 0.5,
+        hidden: int = 64,
+    ):
         self.lr = lr
         self.gamma = gamma
         self.clip_eps = clip_eps
-        # board occupancy plus current player flag and win-move counts for
-        # both players
-        self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 3
+        self.gae_lambda = gae_lambda
+        self.entropy_coef = entropy_coef
+        self.max_grad_norm = max_grad_norm
+        self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 1
         self.action_dim = BOARD_SIZE * BOARD_SIZE * len(SIZES)
 
         self.model = nn.Sequential(
@@ -122,10 +132,10 @@ class PPOAgent:
         clip_ratio = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps)
         policy_loss = -(torch.min(ratio * advs, clip_ratio * advs)).mean()
         value_loss = F.mse_loss(values, returns)
-        loss = policy_loss + 0.5 * value_loss
-        return loss, policy_loss, value_loss
+        entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
+        return policy_loss + 0.5 * value_loss - self.entropy_coef * entropy
 
-    def update(self, steps: List[Step], epochs: int = 3, batch_size: int = 8):
+    def update(self, steps: List[Step], epochs: int = 4, batch_size: int = 512):
         obs = torch.tensor([s.obs for s in steps], dtype=torch.float32)
         masks = torch.tensor([s.mask for s in steps], dtype=torch.bool)
         actions = torch.tensor([s.action for s in steps], dtype=torch.long)
@@ -151,6 +161,12 @@ class PPOAgent:
                 )
                 self.optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    list(self.model.parameters())
+                    + list(self.policy_head.parameters())
+                    + list(self.value_head.parameters()),
+                    self.max_grad_norm,
+                )
                 self.optimizer.step()
                 losses.append(loss.item())
                 policy_losses.append(pol.item())

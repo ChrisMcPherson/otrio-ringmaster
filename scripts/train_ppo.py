@@ -45,12 +45,15 @@ def play_episode(env: OtrioEnv, learner: PPOAgent, opponent: TabularQAgent):
             if done and info.get("winner") == player and last_agent_step is not None:
                 last_agent_step.reward = -1.0
             player = env.current_player
-    # Compute returns and advantages
-    R = 0.0
+    # Compute returns and advantages with GAE
+    next_value = 0.0
+    gae = 0.0
     for step in reversed(steps):
-        R = step.reward + learner.gamma * R
-        step.ret = R
-        step.adv = step.ret - step.value
+        delta = step.reward + learner.gamma * next_value - step.value
+        gae = delta + learner.gamma * learner.gae_lambda * gae
+        step.adv = gae
+        step.ret = step.adv + step.value
+        next_value = step.value
     return steps, info
 
 
@@ -62,14 +65,9 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         learner.load(load)
 
     writer = SummaryWriter()
-    writer.add_text(
-        "hparams",
-        f"lr={learner.lr}, gamma={learner.gamma}, clip_eps={learner.clip_eps}",
-        global_step=0,
-    )
-
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
+    STEPS_PER_EPOCH = 4096
 
     for ep in range(1, episodes + 1):
         steps, info = play_episode(env, learner, opponent)
@@ -84,11 +82,8 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         writer.add_scalar("episode_length", episode_length, ep)
         writer.add_scalar("win_rate_recent", win_rate, ep)
 
-        if ep % 10 == 0:
-            metrics = learner.update(batch)
-            writer.add_scalar("loss", metrics["loss"], ep)
-            writer.add_scalar("policy_loss", metrics["policy_loss"], ep)
-            writer.add_scalar("value_loss", metrics["value_loss"], ep)
+        if len(batch) >= STEPS_PER_EPOCH:
+            learner.update(batch)
             batch.clear()
 
         if ep % 50 == 0:
@@ -96,6 +91,8 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
             if checkpoint:
                 learner.save(checkpoint)
 
+    if batch:
+        learner.update(batch)
     writer.close()
     if checkpoint:
         learner.save(checkpoint)
