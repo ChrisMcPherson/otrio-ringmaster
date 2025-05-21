@@ -35,14 +35,21 @@ class OtrioEnv:
             info["illegal_move"] = True
             obs = self.board.to_observation()
             return obs, reward, False, info
+        opponent = (self.current_player + 1) % self.players
+        before = self.board.num_winning_moves(opponent)
         self.board.apply_move(self.current_player, row, col, size)
+        after = self.board.num_winning_moves(opponent)
         if self.board.check_win(self.current_player):
             reward = 1.0
+            if after < before:
+                reward += 0.1 * (before - after)
             self.done = True
             info["winner"] = self.current_player
         elif self.board.is_full():
             self.done = True
         else:
+            if after < before:
+                reward += 0.1 * (before - after)
             self.current_player = (self.current_player + 1) % self.players
         obs = self.board.to_observation()
         return obs, reward, self.done, info
