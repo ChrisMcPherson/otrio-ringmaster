@@ -62,6 +62,12 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         learner.load(load)
 
     writer = SummaryWriter()
+    writer.add_text(
+        "hparams",
+        f"lr={learner.lr}, gamma={learner.gamma}, clip_eps={learner.clip_eps}",
+        global_step=0,
+    )
+
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
 
@@ -79,7 +85,10 @@ def train(episodes: int = 1000, checkpoint: str | None = None, load: str | None 
         writer.add_scalar("win_rate_recent", win_rate, ep)
 
         if ep % 10 == 0:
-            learner.update(batch)
+            metrics = learner.update(batch)
+            writer.add_scalar("loss", metrics["loss"], ep)
+            writer.add_scalar("policy_loss", metrics["policy_loss"], ep)
+            writer.add_scalar("value_loss", metrics["value_loss"], ep)
             batch.clear()
 
         if ep % 50 == 0:

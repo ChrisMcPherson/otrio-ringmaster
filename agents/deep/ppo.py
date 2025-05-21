@@ -122,7 +122,8 @@ class PPOAgent:
         clip_ratio = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps)
         policy_loss = -(torch.min(ratio * advs, clip_ratio * advs)).mean()
         value_loss = F.mse_loss(values, returns)
-        return policy_loss + 0.5 * value_loss
+        loss = policy_loss + 0.5 * value_loss
+        return loss, policy_loss, value_loss
 
     def update(self, steps: List[Step], epochs: int = 3, batch_size: int = 8):
         obs = torch.tensor([s.obs for s in steps], dtype=torch.float32)
@@ -133,11 +134,14 @@ class PPOAgent:
         advs = torch.tensor([s.adv for s in steps], dtype=torch.float32)
         advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
+        losses = []
+        policy_losses = []
+        value_losses = []
         for _ in range(epochs):
             perm = torch.randperm(len(steps))
             for start in range(0, len(steps), batch_size):
                 idx = perm[start:start + batch_size]
-                loss = self._compute_loss(
+                loss, pol, val = self._compute_loss(
                     obs[idx],
                     masks[idx],
                     actions[idx],
@@ -148,6 +152,15 @@ class PPOAgent:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                losses.append(loss.item())
+                policy_losses.append(pol.item())
+                value_losses.append(val.item())
+
+        return {
+            "loss": float(sum(losses) / len(losses)),
+            "policy_loss": float(sum(policy_losses) / len(policy_losses)),
+            "value_loss": float(sum(value_losses) / len(value_losses)),
+        }
 
     def save(self, path: str):
         torch.save(
