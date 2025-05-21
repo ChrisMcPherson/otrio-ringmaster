@@ -98,3 +98,16 @@ class Board:
                     if owner is not None:
                         obs[owner][s][r][c] = 1
         return obs
+
+    def num_winning_moves(self, player: int) -> int:
+        """Return the number of legal moves that would immediately win."""
+        count = 0
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                for s in SIZES:
+                    if self.is_legal(player, r, c, s):
+                        self.grid[r][c][s] = player
+                        if self.check_win(player):
+                            count += 1
+                        self.grid[r][c][s] = None
+        return count

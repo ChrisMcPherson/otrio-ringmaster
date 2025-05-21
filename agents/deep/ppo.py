@@ -35,6 +35,7 @@ class PPOAgent:
         entropy_coef: float = 0.02,
         max_grad_norm: float = 0.5,
         hidden: int = 64,
+        architecture: str = "mlp",
     ):
         self.lr = lr
         self.gamma = gamma
@@ -47,19 +48,51 @@ class PPOAgent:
         self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 3
         self.action_dim = BOARD_SIZE * BOARD_SIZE * len(SIZES)
 
-        self.model = nn.Sequential(
-            nn.Linear(self.input_dim, hidden),
-            nn.Tanh(),
-        )
+        self.architecture = architecture
+        if architecture == "mlp":
+            self.model = nn.Sequential(
+                nn.Linear(self.input_dim, hidden),
+                nn.Tanh(),
+            )
+        elif architecture == "mlp2":
+            self.model = nn.Sequential(
+                nn.Linear(self.input_dim, hidden),
+                nn.Tanh(),
+                nn.Linear(hidden, hidden),
+                nn.Tanh(),
+            )
+        elif architecture == "conv":
+            channels = len(SIZES) * 2
+            self.conv = nn.Sequential(
+                nn.Conv2d(channels, 16, kernel_size=2),
+                nn.ReLU(),
+                nn.Conv2d(16, 32, kernel_size=2),
+                nn.ReLU(),
+                nn.Flatten(),
+            )
+            with torch.no_grad():
+                dummy = torch.zeros(1, channels, BOARD_SIZE, BOARD_SIZE)
+                conv_out = self.conv(dummy).view(1, -1).size(1)
+            self.model = nn.Sequential(
+                nn.Linear(conv_out + 3, hidden),
+                nn.Tanh(),
+                nn.Linear(hidden, hidden),
+                nn.Tanh(),
+            )
+        else:
+            raise ValueError(f"Unsupported architecture: {architecture}")
+
         self.policy_head = nn.Linear(hidden, self.action_dim)
         self.value_head = nn.Linear(hidden, 1)
 
-        self.optimizer = torch.optim.Adam(
+        params = (
             list(self.model.parameters())
             + list(self.policy_head.parameters())
-            + list(self.value_head.parameters()),
-            lr=self.lr,
+            + list(self.value_head.parameters())
         )
+        if architecture == "conv":
+            params += list(self.conv.parameters())
+        self.optimizer = torch.optim.Adam(params, lr=self.lr)
 
     # utilities -----------------------------------------------------------
     def _num_winning_moves(self, board: Board, player: int) -> int:
@@ -99,7 +132,17 @@ class PPOAgent:
         return mask
 
     def _forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        hidden = self.model(obs)
+        if self.architecture == "conv":
+            board_part = obs[:, :-3]
+            extra = obs[:, -3:]
+            bsz = obs.size(0)
+            planes = board_part.view(
+                bsz, len(SIZES) * 2, BOARD_SIZE, BOARD_SIZE
+            )
+            conv_feat = self.conv(planes)
+            hidden = self.model(torch.cat([conv_feat, extra], dim=1))
+        else:
+            hidden = self.model(obs)
         logits = self.policy_head(hidden)
         value = self.value_head(hidden).squeeze(-1)
         return logits, value
@@ -174,6 +217,7 @@ class PPOAgent:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
                     list(self.model.parameters())
+                    + ([p for p in self.conv.parameters()] if hasattr(self, "conv") else [])
                     + list(self.policy_head.parameters())
                     + list(self.value_head.parameters()),
                     self.max_grad_norm,
@@ -197,6 +241,7 @@ class PPOAgent:
         torch.save(
             {
                 "model": self.model.state_dict(),
+                "conv": self.conv.state_dict() if hasattr(self, "conv") else None,
                 "policy_head": self.policy_head.state_dict(),
                 "value_head": self.value_head.state_dict(),
             },
@@ -206,6 +251,8 @@ class PPOAgent:
     def load(self, path: str):
         data = torch.load(path, map_location="cpu")
         self.model.load_state_dict(data["model"])
+        if data.get("conv") is not None and hasattr(self, "conv"):
+            self.conv.load_state_dict(data["conv"])
         self.policy_head.load_state_dict(data["policy_head"])
         self.value_head.load_state_dict(data["value_head"])
 
@@ -213,6 +260,7 @@ class PPOAgent:
         """Return a state dict containing the model and head weights."""
         return {
             "model": self.model.state_dict(),
+            "conv": self.conv.state_dict() if hasattr(self, "conv") else None,
             "policy_head": self.policy_head.state_dict(),
             "value_head": self.value_head.state_dict(),
         }
@@ -220,6 +268,8 @@ class PPOAgent:
     def load_state_dict(self, state: dict):
         """Load weights from a state dict produced by :meth:`state_dict`."""
         self.model.load_state_dict(state["model"])
+        if state.get("conv") is not None and hasattr(self, "conv"):
+            self.conv.load_state_dict(state["conv"])
         self.policy_head.load_state_dict(state["policy_head"])
         self.value_head.load_state_dict(state["value_head"])
 
