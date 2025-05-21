@@ -26,7 +26,16 @@ class Step:
 class PPOAgent:
     """PPO agent implemented using PyTorch."""
 
-    def __init__(self, lr: float = 1e-3, gamma: float = 0.99, clip_eps: float = 0.2, hidden: int = 64):
+    def __init__(
+        self,
+        lr: float = 3e-4,
+        gamma: float = 0.95,
+        clip_eps: float = 0.2,
+        gae_lambda: float = 0.95,
+        entropy_coef: float = 0.02,
+        max_grad_norm: float = 0.5,
+        hidden: int = 64,
+    ):
         self.lr = lr
         self.gamma = gamma
         self.clip_eps = clip_eps
@@ -50,6 +59,19 @@ class PPOAgent:
         )
 
     # utilities -----------------------------------------------------------
+    def _num_winning_moves(self, board: Board, player: int) -> int:
+        """Return how many legal moves result in an immediate win."""
+        count = 0
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                for s in SIZES:
+                    if board.is_legal(player, r, c, s):
+                        board.grid[r][c][s] = player
+                        if board.check_win(player):
+                            count += 1
+                        board.grid[r][c][s] = None
+        return count
+
     def _encode(self, board: Board, player: int) -> List[float]:
         obs = board.to_observation()
         vec: List[float] = []
@@ -63,6 +85,10 @@ class PPOAgent:
         vec.append(float(self._num_winning_moves(board, 1)))
         # indicate whose turn it is
         vec.append(float(player))
+
+        # Append counts of immediate winning moves for the agent and opponent
+        vec.append(float(self._num_winning_moves(board, player)))
+        vec.append(float(self._num_winning_moves(board, 1 - player)))
         return vec
 
     def _num_winning_moves(self, board: Board, player: int) -> int:
@@ -120,9 +146,10 @@ class PPOAgent:
         clip_ratio = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps)
         policy_loss = -(torch.min(ratio * advs, clip_ratio * advs)).mean()
         value_loss = F.mse_loss(values, returns)
-        return policy_loss + 0.5 * value_loss
+        entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
+        return policy_loss + 0.5 * value_loss - self.entropy_coef * entropy
 
-    def update(self, steps: List[Step], epochs: int = 3, batch_size: int = 8):
+    def update(self, steps: List[Step], epochs: int = 4, batch_size: int = 512):
         obs = torch.tensor([s.obs for s in steps], dtype=torch.float32)
         masks = torch.tensor([s.mask for s in steps], dtype=torch.bool)
         actions = torch.tensor([s.action for s in steps], dtype=torch.long)
@@ -131,11 +158,14 @@ class PPOAgent:
         advs = torch.tensor([s.adv for s in steps], dtype=torch.float32)
         advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
+        losses = []
+        policy_losses = []
+        value_losses = []
         for _ in range(epochs):
             perm = torch.randperm(len(steps))
             for start in range(0, len(steps), batch_size):
                 idx = perm[start:start + batch_size]
-                loss = self._compute_loss(
+                loss, pol, val = self._compute_loss(
                     obs[idx],
                     masks[idx],
                     actions[idx],
@@ -145,7 +175,22 @@ class PPOAgent:
                 )
                 self.optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    list(self.model.parameters())
+                    + list(self.policy_head.parameters())
+                    + list(self.value_head.parameters()),
+                    self.max_grad_norm,
+                )
                 self.optimizer.step()
+                losses.append(loss.item())
+                policy_losses.append(pol.item())
+                value_losses.append(val.item())
+
+        return {
+            "loss": float(sum(losses) / len(losses)),
+            "policy_loss": float(sum(policy_losses) / len(policy_losses)),
+            "value_loss": float(sum(value_losses) / len(value_losses)),
+        }
 
     def save(self, path: str):
         torch.save(

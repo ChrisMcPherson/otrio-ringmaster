@@ -45,12 +45,15 @@ def play_episode(env: OtrioEnv, learner: PPOAgent, opponent: TabularQAgent):
             if done and info.get("winner") == player and last_agent_step is not None:
                 last_agent_step.reward = -1.0
             player = env.current_player
-    # Compute returns and advantages
-    R = 0.0
+    # Compute returns and advantages with GAE
+    next_value = 0.0
+    gae = 0.0
     for step in reversed(steps):
-        R = step.reward + learner.gamma * R
-        step.ret = R
-        step.adv = step.ret - step.value
+        delta = step.reward + learner.gamma * next_value - step.value
+        gae = delta + learner.gamma * learner.gae_lambda * gae
+        step.adv = gae
+        step.ret = step.adv + step.value
+        next_value = step.value
     return steps, info
 
 

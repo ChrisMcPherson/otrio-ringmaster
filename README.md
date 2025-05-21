@@ -128,6 +128,10 @@ python scripts/play_vs_ppo.py --model ppo_agent.pkl
 ```
 
 Logs (TensorBoard & CSV) land in `./runs/`, checkpoints in `./checkpoints/`.
+To visualize training metrics, run:
+```bash
+tensorboard --logdir runs
+```
 
 ---
 
