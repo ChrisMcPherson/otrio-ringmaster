@@ -117,14 +117,21 @@ pip install -e ".[dev]"
 # quick sanity check
 pytest
 
-# train a PPO agent
-python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_agent.pkl
+
+# train a PPO agent against the tabular Q baseline
+python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_agent.pkl --stage tabq
+
+# continue training via self‑play
+# (start from a previous checkpoint and fight snapshots of the learner)
+python scripts/train_ppo.py --episodes 1000 --stage pool \
+    --load checkpoints/after_tabq.pt --checkpoint selfplay_ppo.pt
+
 
 # or quickly try the tabular Q-learning baseline
 python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
 
 # play against your trained PPO agent
-python scripts/play_vs_ppo.py --model ppo_agent.pkl
+python scripts/play_vs_ppo.py --model checkpoints/selfplay_ppo.pt
 ```
 
 Logs (TensorBoard & CSV) land in `./runs/`, checkpoints in `./checkpoints/`.
