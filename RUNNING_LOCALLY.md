@@ -26,7 +26,12 @@ python scripts/train_tabular_q.py --episodes 200 --checkpoint q_agent.pkl
 To try the lightweight PPO implementation:
 
 ```bash
-python scripts/train_ppo.py --episodes 200 --checkpoint ppo_agent.pkl
+python scripts/train_ppo.py --episodes 200 --checkpoint ppo_agent.pkl --stage tabq
+
+# continue training from a checkpoint against a snapshot pool of yourself
+python scripts/train_ppo.py --episodes 200 --stage pool \
+    --load checkpoints/after_tabq.pt --checkpoint selfplay_ppo.pt
 ```
 
-Both scripts print periodic win statistics and write checkpoints when the `--checkpoint` argument is supplied.
+Both scripts print periodic win statistics and write checkpoints when the
+`--checkpoint` argument is supplied.
