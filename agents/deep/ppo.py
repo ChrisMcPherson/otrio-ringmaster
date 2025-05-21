@@ -60,6 +60,19 @@ class PPOAgent:
         )
 
     # utilities -----------------------------------------------------------
+    def _num_winning_moves(self, board: Board, player: int) -> int:
+        """Return how many legal moves result in an immediate win."""
+        count = 0
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                for s in SIZES:
+                    if board.is_legal(player, r, c, s):
+                        board.grid[r][c][s] = player
+                        if board.check_win(player):
+                            count += 1
+                        board.grid[r][c][s] = None
+        return count
+
     def _encode(self, board: Board, player: int) -> List[float]:
         obs = board.to_observation()
         vec: List[float] = []
@@ -68,7 +81,13 @@ class PPOAgent:
                 for r in range(BOARD_SIZE):
                     for c in range(BOARD_SIZE):
                         vec.append(float(obs[p][s][r][c]))
+
+        # Add current player indicator
         vec.append(float(player))
+
+        # Append counts of immediate winning moves for the agent and opponent
+        vec.append(float(self._num_winning_moves(board, player)))
+        vec.append(float(self._num_winning_moves(board, 1 - player)))
         return vec
 
     def _legal_mask(self, board: Board, player: int) -> List[int]:
@@ -125,11 +144,14 @@ class PPOAgent:
         advs = torch.tensor([s.adv for s in steps], dtype=torch.float32)
         advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
+        losses = []
+        policy_losses = []
+        value_losses = []
         for _ in range(epochs):
             perm = torch.randperm(len(steps))
             for start in range(0, len(steps), batch_size):
                 idx = perm[start:start + batch_size]
-                loss = self._compute_loss(
+                loss, pol, val = self._compute_loss(
                     obs[idx],
                     masks[idx],
                     actions[idx],
@@ -146,6 +168,15 @@ class PPOAgent:
                     self.max_grad_norm,
                 )
                 self.optimizer.step()
+                losses.append(loss.item())
+                policy_losses.append(pol.item())
+                value_losses.append(val.item())
+
+        return {
+            "loss": float(sum(losses) / len(losses)),
+            "policy_loss": float(sum(policy_losses) / len(policy_losses)),
+            "value_loss": float(sum(value_losses) / len(value_losses)),
+        }
 
     def save(self, path: str):
         torch.save(
