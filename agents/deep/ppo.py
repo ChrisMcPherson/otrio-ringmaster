@@ -30,7 +30,9 @@ class PPOAgent:
         self.lr = lr
         self.gamma = gamma
         self.clip_eps = clip_eps
-        self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 1
+        # two players × three sizes × 3x3 board plus
+        # current-player indicator and win-move counts for each player
+        self.input_dim = len(SIZES) * BOARD_SIZE * BOARD_SIZE * 2 + 3
         self.action_dim = BOARD_SIZE * BOARD_SIZE * len(SIZES)
 
         self.model = nn.Sequential(
@@ -56,8 +58,25 @@ class PPOAgent:
                 for r in range(BOARD_SIZE):
                     for c in range(BOARD_SIZE):
                         vec.append(float(obs[p][s][r][c]))
+        # add win-move counts for each player
+        vec.append(float(self._num_winning_moves(board, 0)))
+        vec.append(float(self._num_winning_moves(board, 1)))
+        # indicate whose turn it is
         vec.append(float(player))
         return vec
+
+    def _num_winning_moves(self, board: Board, player: int) -> int:
+        """Count legal moves that would immediately win for the given player."""
+        count = 0
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                for s in SIZES:
+                    if board.is_legal(player, r, c, s):
+                        board.apply_move(player, r, c, s)
+                        if board.check_win(player):
+                            count += 1
+                        board.grid[r][c][s] = None
+        return count
 
     def _legal_mask(self, board: Board, player: int) -> List[int]:
         mask = []
