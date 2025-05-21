@@ -130,11 +130,19 @@ class PPOAgent:
         selected_logp = log_probs[range(len(actions)), actions]
         ratio = torch.exp(selected_logp - old_logp)
         clip_ratio = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps)
+
+        # PPO surrogate objective
         policy_loss = -(torch.min(ratio * advs, clip_ratio * advs)).mean()
         value_loss = F.mse_loss(values, returns)
+
+        # Entropy bonus to encourage exploration
         entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
+
+        # Approximate KL divergence between old and new policy
+        approx_kl = (old_logp - selected_logp).mean()
+
         loss = policy_loss + 0.5 * value_loss - self.entropy_coef * entropy
-        return loss, policy_loss, value_loss
+        return loss, policy_loss, value_loss, entropy, approx_kl
 
     def update(self, steps: List[Step], epochs: int = 4, batch_size: int = 512):
         obs = torch.tensor([s.obs for s in steps], dtype=torch.float32)
@@ -148,11 +156,13 @@ class PPOAgent:
         losses = []
         policy_losses = []
         value_losses = []
+        entropies = []
+        approx_kls = []
         for _ in range(epochs):
             perm = torch.randperm(len(steps))
             for start in range(0, len(steps), batch_size):
                 idx = perm[start:start + batch_size]
-                loss, pol, val = self._compute_loss(
+                loss, pol, val, ent, kl = self._compute_loss(
                     obs[idx],
                     masks[idx],
                     actions[idx],
@@ -172,11 +182,15 @@ class PPOAgent:
                 losses.append(loss.item())
                 policy_losses.append(pol.item())
                 value_losses.append(val.item())
+                entropies.append(ent.item())
+                approx_kls.append(kl.item())
 
         return {
             "loss": float(sum(losses) / len(losses)),
             "policy_loss": float(sum(policy_losses) / len(policy_losses)),
             "value_loss": float(sum(value_losses) / len(value_losses)),
+            "entropy": float(sum(entropies) / len(entropies)),
+            "approx_kl": float(sum(approx_kls) / len(approx_kls)),
         }
 
     def save(self, path: str):
