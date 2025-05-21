@@ -195,3 +195,17 @@ class PPOAgent:
         self.policy_head.load_state_dict(data["policy_head"])
         self.value_head.load_state_dict(data["value_head"])
 
+    def state_dict(self) -> dict:
+        """Return a state dict containing the model and head weights."""
+        return {
+            "model": self.model.state_dict(),
+            "policy_head": self.policy_head.state_dict(),
+            "value_head": self.value_head.state_dict(),
+        }
+
+    def load_state_dict(self, state: dict):
+        """Load weights from a state dict produced by :meth:`state_dict`."""
+        self.model.load_state_dict(state["model"])
+        self.policy_head.load_state_dict(state["policy_head"])
+        self.value_head.load_state_dict(state["value_head"])
+
