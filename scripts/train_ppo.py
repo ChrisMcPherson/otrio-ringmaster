@@ -45,10 +45,8 @@ def play_episode(env: OtrioEnv, learner: PPOAgent, opponent):
             player = env.current_player
         else:
             prev_board = env.board.clone()
-            if isinstance(opponent, PPOAgent):
-                action, _ = opponent.select_action(prev_board, player)
-            else:
-                action = opponent.select_action(prev_board, player)
+            opp_action = opponent.select_action(prev_board, player)
+            action = opp_action[0] if isinstance(opponent, PPOAgent) else opp_action
             obs, reward, done, info = env.step(action)
             # Only the tabular‑Q opponent learns online.
             if isinstance(opponent, TabularQAgent):
