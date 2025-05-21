@@ -133,7 +133,8 @@ class PPOAgent:
         policy_loss = -(torch.min(ratio * advs, clip_ratio * advs)).mean()
         value_loss = F.mse_loss(values, returns)
         entropy = -(log_probs.exp() * log_probs).sum(-1).mean()
-        return policy_loss + 0.5 * value_loss - self.entropy_coef * entropy
+        loss = policy_loss + 0.5 * value_loss - self.entropy_coef * entropy
+        return loss, policy_loss, value_loss
 
     def update(self, steps: List[Step], epochs: int = 4, batch_size: int = 512):
         obs = torch.tensor([s.obs for s in steps], dtype=torch.float32)
