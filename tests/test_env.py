@@ -14,3 +14,12 @@ def test_environment_playthrough():
         obs, reward, done, info = env.step(action)
         moves += 1
     assert done
+
+
+def test_start_player_randomized():
+    env = OtrioEnv(players=2)
+    starts = set()
+    for _ in range(20):
+        _, info = env.reset()
+        starts.add(info["current_player"])
+    assert starts == {0, 1}
