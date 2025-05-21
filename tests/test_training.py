@@ -18,3 +18,21 @@ def test_ppo_training(tmp_path):
         check=True,
     )
     assert checkpoint.exists()
+
+
+def test_ppo_pool_training(tmp_path):
+    checkpoint = tmp_path / "ppo_pool.pkl"
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/train_ppo.py",
+            "--episodes",
+            "1",
+            "--stage",
+            "pool",
+            "--checkpoint",
+            str(checkpoint),
+        ],
+        check=True,
+    )
+    assert checkpoint.exists()
