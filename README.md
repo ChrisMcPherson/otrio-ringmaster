@@ -132,6 +132,8 @@ python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
 
 # play against your trained PPO agent
 python scripts/play_vs_ppo.py --model checkpoints/selfplay_ppo.pt
+# or launch a simple web UI via Streamlit
+streamlit run scripts/play_vs_ppo_streamlit.py -- --model checkpoints/selfplay_ppo.pt
 ```
 
 Logs (TensorBoard & CSV) land in `./runs/`, checkpoints in `./checkpoints/`.
