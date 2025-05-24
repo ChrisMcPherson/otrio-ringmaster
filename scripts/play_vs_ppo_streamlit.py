@@ -74,7 +74,14 @@ for r in range(BOARD_SIZE):
     cols = st.columns(BOARD_SIZE)
     for c in range(BOARD_SIZE):
         cell = board.grid[r][c]
-        label = "".join(str(cell[s]) if cell[s] is not None else "." for s in SIZES)
+        label_parts = []
+        for s in SIZES:
+            owner = cell[s]
+            if owner is not None:
+                label_parts.append(f"{Size(s).name[0]}{owner}")
+            else:
+                label_parts.append(" ")
+        label = "\n".join(label_parts)
         disabled = (
             st.session_state.done
             or st.session_state.player != st.session_state.human_player
