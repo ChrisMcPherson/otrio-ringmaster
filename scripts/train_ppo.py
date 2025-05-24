@@ -6,6 +6,7 @@ from collections import deque
 # Extra imports for snapshot pool
 import copy
 import random
+import time
 import torch
 
 # ──────────────────────────────────────────────────────────────
@@ -89,9 +90,11 @@ def train(
         opponent_pool = None
     elif stage == "pool":
         opponent = PPOAgent(architecture=architecture)  # frozen opponent (weights replaced each episode)
-        opponent_pool: list[dict[str, torch.Tensor]] = []
+        opponent_pool: list[tuple[str, dict[str, torch.Tensor]]] = []
         # prime the pool with the learner's initial weights
-        opponent_pool.append(copy.deepcopy(learner.state_dict()))
+        init_id = f"init_{int(time.time())}"
+        opponent_pool.append((init_id, copy.deepcopy(learner.state_dict())))
+        print(f"Added snapshot {init_id} to opponent pool")
     else:
         raise ValueError(f"Unsupported stage: {stage!r}")
 
@@ -106,9 +109,10 @@ def train(
     for ep in range(1, episodes + 1):
         # --- choose opponent weights if we are in snapshot‑pool mode -------------
         if stage == "pool" and opponent_pool:
-            snapshot = random.choice(opponent_pool)
+            snap_id, snapshot = random.choice(opponent_pool)
             opponent.load_state_dict(snapshot)
             opponent.model.eval()
+            print(f"[Episode {ep}] Loaded opponent snapshot {snap_id}")
 
         steps, info = play_episode(env, learner, opponent)
         batch.extend(steps)
@@ -144,9 +148,12 @@ def train(
 
             # -- periodically snapshot learner weights into the opponent pool -----
             if stage == "pool" and (ep % SNAPSHOT_EP_INTERVAL == 0):
-                opponent_pool.append(copy.deepcopy(learner.state_dict()))
+                snap_id = f"ep{ep}_{int(time.time())}"
+                opponent_pool.append((snap_id, copy.deepcopy(learner.state_dict())))
+                print(f"Added snapshot {snap_id} to opponent pool (size {len(opponent_pool)})")
                 if len(opponent_pool) > POOL_SIZE:
-                    opponent_pool.pop(0)
+                    removed_id, _ = opponent_pool.pop(0)
+                    print(f"Removed snapshot {removed_id} from opponent pool")
 
         if ep % 50 == 0:
             print(f"Episode {ep}: last {len(recent_results)}-episode win rate {win_rate * 100:.1f}%")
