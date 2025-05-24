@@ -79,15 +79,16 @@ def train(
     checkpoint: str | None = None,
     load: str | None = None,
     stage: str = "tabq",           # "tabq" or "pool"
+    architecture: str = "mlp",
 ):
     env = OtrioEnv(players=2)
-    learner = PPOAgent()
+    learner = PPOAgent(architecture=architecture)
 
     if stage == "tabq":
         opponent = TabularQAgent()
         opponent_pool = None
     elif stage == "pool":
-        opponent = PPOAgent()               # frozen opponent (weights replaced each episode)
+        opponent = PPOAgent(architecture=architecture)  # frozen opponent (weights replaced each episode)
         opponent_pool: list[dict[str, torch.Tensor]] = []
         # prime the pool with the learner's initial weights
         opponent_pool.append(copy.deepcopy(learner.state_dict()))
@@ -167,7 +168,14 @@ if __name__ == "__main__":
         type=str,
         default="tabq",
         choices=["tabq", "pool"],
-        help="Training stage: tabq (learner vs tabular‑Q) or pool (learner vs frozen snapshot pool)",
+        help="Training stage: tabq (learner vs tabular-Q) or pool (learner vs frozen snapshot pool)",
+    )
+    parser.add_argument(
+        "--arch",
+        type=str,
+        default="mlp",
+        choices=["mlp", "mlp2", "conv"],
+        help="Neural network architecture: mlp, mlp2, or conv",
     )
     args = parser.parse_args()
-    train(args.episodes, args.checkpoint, args.load, args.stage)
+    train(args.episodes, args.checkpoint, args.load, args.stage, args.arch)

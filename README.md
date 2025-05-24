@@ -120,6 +120,8 @@ pytest
 
 # train a PPO agent against the tabular Q baseline
 python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_agent.pkl --stage tabq
+# use the convolutional network instead of the default MLP
+python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_conv.pkl --stage tabq --arch conv
 
 # continue training via self‑play
 # (start from a previous checkpoint and fight snapshots of the learner)
