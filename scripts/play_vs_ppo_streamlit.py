@@ -42,7 +42,6 @@ def init_game():
     st.session_state.done = False
     st.session_state.info = info
     st.session_state.human_player = args.human_player
-    st.session_state.selected_size = 0
 
 
 def agent_turn():
@@ -67,12 +66,6 @@ if not st.session_state.done and st.session_state.player != st.session_state.hum
 board = st.session_state.env.board
 st.title("Play Otrio vs PPO Agent")
 
-st.sidebar.radio(
-    "Select piece size",
-    options=[0, 1, 2],
-    format_func=lambda x: Size(x).name.title(),
-    key="selected_size",
-)
 if st.sidebar.button("Reset Game"):
     init_game()
     st.experimental_rerun()
@@ -80,28 +73,34 @@ if st.sidebar.button("Reset Game"):
 for r in range(BOARD_SIZE):
     cols = st.columns(BOARD_SIZE)
     for c in range(BOARD_SIZE):
-        cell = board.grid[r][c]
-        label_parts = []
-        for s in SIZES:
-            owner = cell[s]
-            if owner is not None:
-                label_parts.append(f"{Size(s).name[0]}{owner}")
-            else:
-                label_parts.append(" ")
-        label = "\n".join(label_parts)
-        disabled = (
-            st.session_state.done
-            or st.session_state.player != st.session_state.human_player
-            or not board.is_legal(st.session_state.player, r, c, Size(st.session_state.selected_size))
-        )
-        if cols[c].button(label or " ", key=f"{r}-{c}", disabled=disabled):
-            _, _, done, info = st.session_state.env.step((r * BOARD_SIZE + c, st.session_state.selected_size))
-            st.session_state.done = done
-            st.session_state.player = st.session_state.env.current_player
-            st.session_state.info = info
-            if not done and st.session_state.player != st.session_state.human_player:
-                agent_turn()
-            st.experimental_rerun()
+        with cols[c]:
+            cell = board.grid[r][c]
+            sub_cols = st.columns(len(SIZES))
+            for s_idx, sub in enumerate(sub_cols):
+                owner = cell[s_idx]
+                label = (
+                    f"P{owner + 1}"
+                    if owner is not None
+                    else Size(s_idx).name[0]
+                )
+                disabled = (
+                    st.session_state.done
+                    or st.session_state.player != st.session_state.human_player
+                    or not board.is_legal(st.session_state.player, r, c, Size(s_idx))
+                )
+                if sub.button(label, key=f"{r}-{c}-{s_idx}", disabled=disabled):
+                    _, _, done, info = st.session_state.env.step(
+                        (r * BOARD_SIZE + c, s_idx)
+                    )
+                    st.session_state.done = done
+                    st.session_state.player = st.session_state.env.current_player
+                    st.session_state.info = info
+                    if (
+                        not done
+                        and st.session_state.player != st.session_state.human_player
+                    ):
+                        agent_turn()
+                    st.experimental_rerun()
 
 st.write("")
 
