@@ -49,9 +49,9 @@ def prompt_move(board, player):
             print("Invalid input, try again.")
 
 
-def play(model_path: str, human_player: int = 1, show_grid: bool = False):
+def play(model_path: str, human_player: int = 1, show_grid: bool = False, arch: str = "mlp"):
     env = OtrioEnv(players=2)
-    agent = PPOAgent()
+    agent = PPOAgent(architecture=arch)
     agent.load(model_path)
 
     obs, info = env.reset()
@@ -89,5 +89,12 @@ if __name__ == "__main__":
         action="store_true",
         help="display well numbering before the game starts",
     )
+    parser.add_argument(
+        "--arch",
+        type=str,
+        default="mlp",
+        choices=["mlp", "mlp2", "conv"],
+        help="Architecture used when training the model",
+    )
     args = parser.parse_args()
-    play(args.model, args.human_player, args.show_grid)
+    play(args.model, args.human_player, args.show_grid, args.arch)

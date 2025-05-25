@@ -120,6 +120,8 @@ pytest
 
 # train a PPO agent against the tabular Q baseline
 python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_agent.pkl --stage tabq
+# use the convolutional network instead of the default MLP
+python scripts/train_ppo.py --episodes 1000 --checkpoint ppo_conv.pkl --stage tabq --arch conv
 
 # continue training via self‑play
 # (start from a previous checkpoint and fight snapshots of the learner)
@@ -131,9 +133,12 @@ python scripts/train_ppo.py --episodes 1000 --stage pool \
 python scripts/train_tabular_q.py --episodes 1000 --checkpoint q_agent.pkl
 
 # play against your trained PPO agent
+# specify --arch if the model was trained with a non-default architecture
 python scripts/play_vs_ppo.py --model checkpoints/selfplay_ppo.pt
+python scripts/play_vs_ppo.py --model checkpoints/ppo_conv.pkl --arch conv
 # or launch a simple web UI via Streamlit
 streamlit run scripts/play_vs_ppo_streamlit.py -- --model checkpoints/selfplay_ppo.pt
+streamlit run scripts/play_vs_ppo_streamlit.py -- --model checkpoints/ppo_conv.pkl --arch conv
 ```
 
 Logs (TensorBoard & CSV) land in `./runs/`, checkpoints in `./checkpoints/`.
