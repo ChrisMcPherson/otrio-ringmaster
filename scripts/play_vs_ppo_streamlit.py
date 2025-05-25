@@ -18,6 +18,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Play PPO agent with Streamlit UI")
     parser.add_argument("--model", type=str, required=True, help="path to saved model")
     parser.add_argument("--human-player", type=int, default=1, choices=[0, 1], help="0 to play first, 1 to play second")
+    parser.add_argument(
+        "--arch",
+        type=str,
+        default="mlp",
+        choices=["mlp", "mlp2", "conv"],
+        help="Architecture used when training the model",
+    )
     return parser.parse_args()
 
 
@@ -26,7 +33,7 @@ args = parse_args()
 
 def init_game():
     env = OtrioEnv(players=2)
-    agent = PPOAgent()
+    agent = PPOAgent(architecture=args.arch)
     agent.load(args.model)
     obs, info = env.reset()
     st.session_state.env = env
@@ -35,7 +42,6 @@ def init_game():
     st.session_state.done = False
     st.session_state.info = info
     st.session_state.human_player = args.human_player
-    st.session_state.selected_size = 0
 
 
 def agent_turn():
