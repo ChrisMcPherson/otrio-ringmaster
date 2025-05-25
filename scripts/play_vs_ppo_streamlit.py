@@ -60,6 +60,20 @@ if not st.session_state.done and st.session_state.player != st.session_state.hum
 board = st.session_state.env.board
 st.title("Play Otrio vs PPO Agent")
 
+# add borders around buttons to delineate the 3x3 grid
+st.markdown(
+    """
+    <style>
+    div[data-testid="stButton"] > button {
+        border: 1px solid #888;
+        margin: 0;
+        width: 100%;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.sidebar.radio(
     "Select piece size",
     options=[0, 1, 2],
@@ -74,7 +88,14 @@ for r in range(BOARD_SIZE):
     cols = st.columns(BOARD_SIZE)
     for c in range(BOARD_SIZE):
         cell = board.grid[r][c]
-        label = "".join(str(cell[s]) if cell[s] is not None else "." for s in SIZES)
+        label_parts = []
+        for s in SIZES:
+            owner = cell[s]
+            if owner is not None:
+                label_parts.append(f"{Size(s).name[0]}{owner}")
+            else:
+                label_parts.append(" ")
+        label = "\n".join(label_parts)
         disabled = (
             st.session_state.done
             or st.session_state.player != st.session_state.human_player
