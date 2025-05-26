@@ -105,14 +105,19 @@ def train(
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
     timesteps_collected = 0
+    last_snap_id: str | None = None
+    reload_opponent = stage == "pool"  # force load on first episode when using pool
 
     for ep in range(1, episodes + 1):
         # --- choose opponent weights if we are in snapshot‑pool mode -------------
-        if stage == "pool" and opponent_pool:
+        if stage == "pool" and opponent_pool and reload_opponent:
             snap_id, snapshot = random.choice(opponent_pool)
             opponent.load_state_dict(snapshot)
             opponent.model.eval()
-            print(f"[Episode {ep}] Loaded opponent snapshot {snap_id}")
+            if snap_id != last_snap_id:
+                print(f"[Episode {ep}] Loaded opponent snapshot {snap_id}")
+                last_snap_id = snap_id
+            reload_opponent = False
 
         steps, info = play_episode(env, learner, opponent)
         batch.extend(steps)
@@ -151,6 +156,7 @@ def train(
                 snap_id = f"ep{ep}_{int(time.time())}"
                 opponent_pool.append((snap_id, copy.deepcopy(learner.state_dict())))
                 print(f"Added snapshot {snap_id} to opponent pool (size {len(opponent_pool)})")
+                reload_opponent = True
                 if len(opponent_pool) > POOL_SIZE:
                     removed_id, _ = opponent_pool.pop(0)
                     print(f"Removed snapshot {removed_id} from opponent pool")
