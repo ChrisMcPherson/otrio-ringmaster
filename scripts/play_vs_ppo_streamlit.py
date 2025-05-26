@@ -66,11 +66,20 @@ if not st.session_state.done and st.session_state.player != st.session_state.hum
 board = st.session_state.env.board
 st.title("Play Otrio vs PPO Agent")
 
-# add borders around buttons to delineate the 3x3 grid
+# style for board, cells and buttons
 st.markdown(
     """
     <style>
-    div[data-testid="stButton"] > button {
+    /* Give each Otrio well a clear border & some padding           */
+    .game-board div[data-testid="column"] {
+        border: 2px solid #888;
+        border-radius: 4px;
+        padding: 4px;
+        margin: 2px;
+    }
+
+    /* Make every button fill the width of its inner sub‑column     */
+    .game-board div[data-testid="stButton"] > button {
         border: 1px solid #888;
         margin: 0;
         width: 100%;
@@ -84,27 +93,37 @@ if st.sidebar.button("Reset Game"):
     init_game()
     st.experimental_rerun()
 
+# start board wrapper so CSS above scopes nicely
+st.markdown("<div class='game-board'>", unsafe_allow_html=True)
+
 for r in range(BOARD_SIZE):
     cols = st.columns(BOARD_SIZE)
     for c in range(BOARD_SIZE):
         cell = board.grid[r][c]
         with cols[c]:
-            for s in SIZES:
-                owner = cell[s]
-                label = str(owner + 1) if owner is not None else Size(s).name[0]
-                disabled = (
-                    st.session_state.done
-                    or st.session_state.player != st.session_state.human_player
-                    or owner is not None
-                )
-                if st.button(label, key=f"{r}-{c}-{s}", disabled=disabled):
-                    _, _, done, info = st.session_state.env.step((r * BOARD_SIZE + c, s))
-                    st.session_state.done = done
-                    st.session_state.player = st.session_state.env.current_player
-                    st.session_state.info = info
-                    if not done and st.session_state.player != st.session_state.human_player:
-                        agent_turn()
-                    st.experimental_rerun()
+            # lay out the S‑M‑L buttons horizontally inside the cell
+            inner_cols = st.columns(len(SIZES))
+            for idx, s in enumerate(SIZES):
+                with inner_cols[idx]:
+                    owner = cell[s]
+                    label = str(owner + 1) if owner is not None else Size(s).name[0]
+                    disabled = (
+                        st.session_state.done
+                        or st.session_state.player != st.session_state.human_player
+                        or owner is not None
+                    )
+                    if st.button(label, key=f"{r}-{c}-{s}", disabled=disabled):
+                        _, _, done, info = st.session_state.env.step((r * BOARD_SIZE + c, s))
+                        st.session_state.done = done
+                        st.session_state.player = st.session_state.env.current_player
+                        st.session_state.info = info
+                        if not done and st.session_state.player != st.session_state.human_player:
+                            agent_turn()
+                        st.experimental_rerun()
+
+# close board wrapper
+st.markdown("</div>", unsafe_allow_html=True)
+
 
 st.write("")
 
