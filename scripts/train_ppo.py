@@ -105,6 +105,7 @@ def train(
     recent_results: deque[int] = deque(maxlen=50)
     batch: list[Step] = []
     timesteps_collected = 0
+    last_snap_id: str | None = None
 
     for ep in range(1, episodes + 1):
         # --- choose opponent weights if we are in snapshot‑pool mode -------------
@@ -112,7 +113,9 @@ def train(
             snap_id, snapshot = random.choice(opponent_pool)
             opponent.load_state_dict(snapshot)
             opponent.model.eval()
-            print(f"[Episode {ep}] Loaded opponent snapshot {snap_id}")
+            if snap_id != last_snap_id:
+                print(f"[Episode {ep}] Loaded opponent snapshot {snap_id}")
+                last_snap_id = snap_id
 
         steps, info = play_episode(env, learner, opponent)
         batch.extend(steps)
